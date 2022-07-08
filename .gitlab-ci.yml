@@ -1,0 +1,31 @@
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_HOST: tcp://localhost:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_FILE: "Dockerfile"
+  #FOR DOCKER CACHING
+  DOCKER_BUILDKIT: 1
+  DOCKER_VERSION: 19.03.1
+
+stages:
+  - build
+  - deploy
+
+docker-build:
+  # Official docker image.
+  image: docker:${DOCKER_VERSION}
+  stage: build
+  services:
+    - docker:${DOCKER_VERSION}-dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$VERSION || true
+    - docker build --cache-from $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$VERSION --build-arg BUILDKIT_INLINE_CACHE=1 -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA" . -f ${DOCKER_FILE}
+    - docker tag "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA" "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:latest"
+    - docker push "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:latest"
+  only:
+    - release
+    - develop
+    - master
